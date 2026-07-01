@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Alcance Rádio PMR/VHF/UHF</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body { margin:0; padding:0; font-family:'Segoe UI',Tahoma,sans-serif; background:#151a12; color:#e0e5de; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+#fallback-banner { display:none; background:#6b5334; color:#fff; text-align:center; padding:4px; font-size:.75rem; font-weight:bold; border-bottom:1px solid #856842; z-index:4000; }
+#placement-banner { display:none; background:#1a3d26; color:#4eff4e; text-align:center; padding:5px; font-size:.8rem; font-weight:bold; border-bottom:2px solid #4eff4e; z-index:4000; cursor:pointer; }
+.main-container { display:flex; flex:1; width:100%; height:calc(100vh - 155px); position:relative; }
+#sidebar { width:355px; min-width:355px; background:#20271d; padding:10px; box-shadow:2px 0 5px rgba(0,0,0,.5); display:flex; flex-direction:column; gap:7px; height:100%; overflow-y:auto; z-index:1000; }
+#map { flex:1; height:100%; background:#242424; }
+h2 { color:#8fa87b; margin:0; font-size:1.1rem; border-bottom:1px solid #4a5d43; padding-bottom:3px; }
+h3 { color:#b0c4a4; margin:2px 0; font-size:.9rem; border-left:3px solid #5b7a47; padding-left:5px; }
+button { padding:7px; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold; font-size:.78rem; width:100%; transition:background .2s; }
+.btn-howto { background:#4b6240; border:1px solid #6b845c; }
+.btn-calc { background:#5b7a47; } .btn-calc:hover { background:#719659; }
+.btn-export { background:#3b5c66; } .btn-export:hover { background:#4b7380; }
+.btn-danger { background:#6b2828; } .btn-danger:hover { background:#8b3535; }
+.btn-place { background:#1a3d26; border:2px solid #4eff4e; color:#4eff4e; }
+.btn-place:hover { background:#224f30; }
+.btn-neutral { background:#2a3d26; border:1px solid #4a5d43; }
+.btn-neutral:hover { background:#344d30; }
+.btn-row { display:flex; gap:5px; }
+.btn-row button { flex:1; }
+.control-group { display:flex; flex-direction:column; gap:4px; background:#2a3426; padding:8px; border-radius:5px; }
+.row-inputs { display:flex; gap:6px; }
+.row-inputs > div { flex:1; }
+label { font-size:.78rem; color:#cbd5c8; }
+select, input[type=text], input[type=number] { padding:5px; border-radius:4px; border:1px solid #4a5d43; background:#151a12; color:#fff; font-size:.78rem; width:100%; }
+.checkbox-container { display:flex; align-items:center; gap:6px; cursor:pointer; font-size:.78rem; padding:2px 0; }
+.checkbox-container input { width:auto; }
+#results { padding:8px; background:#151a12; border-left:4px solid #8fa87b; border-radius:4px; font-size:.82rem; display:flex; flex-direction:column; gap:3px; }
+.status-good { color:#4eff4e; font-weight:bold; }
+.status-marginal { color:#ffcc00; font-weight:bold; }
+.status-bad { color:#ff4e4e; font-weight:bold; }
+.status-relay { color:#00c3ff; font-weight:bold; }
+.altitude-badge { font-size:.73rem; color:#a4bfa3; font-style:italic; }
+.fresnel-note { font-size:.7rem; color:#7d9474; }
+/* Node list */
+.node-item { display:flex; align-items:center; gap:5px; background:#1a2117; border-radius:4px; padding:5px 7px; border-left:3px solid #5b7a47; }
+.node-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.node-info { flex:1; font-size:.75rem; line-height:1.3; }
+.node-info b { font-size:.8rem; color:#e0e5de; }
+.node-info small { color:#7d9474; }
+.node-btn { width:22px; height:22px; padding:0; flex-shrink:0; background:#3d1814; border-radius:3px; font-size:.75rem; display:flex; align-items:center; justify-content:center; cursor:pointer; border:none; color:#ff4e4e; }
+.node-btn:hover { background:#5d2822; }
+/* Scenario panel */
+.scenario-row { display:flex; gap:5px; }
+.scenario-row input { flex:1; }
+/* Bottom section */
+.bottom-section { height:155px; min-height:155px; background:#0f140e; border-top:2px solid #4a5d43; display:flex; width:100%; }
+.log-box { flex:1; padding:8px; display:flex; flex-direction:column; border-right:1px solid #2d3b28; overflow:hidden; }
+.profile-box { width:460px; min-width:460px; padding:8px; display:flex; flex-direction:column; background:#0b0e0a; }
+.log-title { font-weight:bold; color:#8fa87b; font-size:.82rem; margin-bottom:3px; flex-shrink:0; }
+#log-output { white-space:pre-wrap; flex:1; overflow-y:auto; background:#050705; padding:6px; border-radius:4px; border:1px solid #1a2417; font-family:'Courier New',monospace; font-size:.72rem; color:#a4bfa3; line-height:1.3; }
+#profile-svg { background:#050705; border:1px solid #1a2417; border-radius:4px; flex:1; width:100%; }
+/* Connectivity Matrix */
+#matrix-container { flex:1; overflow:auto; background:#050705; border-radius:4px; border:1px solid #1a2417; }
+.matrix-table { border-collapse:collapse; font-size:.7rem; font-family:'Courier New',monospace; }
+.matrix-table th, .matrix-table td { padding:3px 6px; border:1px solid #1a2417; text-align:center; white-space:nowrap; }
+.matrix-table th { background:#1a2417; color:#8fa87b; font-weight:bold; }
+.matrix-table td.m-self { background:#0a0d09; color:#2a3a26; }
+.matrix-table td.m-good { background:#0d2b0d; color:#4eff4e; }
+.matrix-table td.m-marginal { background:#2b2b00; color:#ffcc00; }
+.matrix-table td.m-relay { background:#002b3d; color:#00c3ff; }
+.matrix-table td.m-blocked { background:#2b0d0d; color:#ff4e4e; }
+footer { background:#0a0d09; color:#445041; text-align:center; padding:3px; font-size:.68rem; border-top:1px solid #141c12; }
+.modal { display:none; position:fixed; z-index:5000; left:0; top:0; width:100%; height:100%; overflow:auto; background:rgba(0,0,0,.82); backdrop-filter:blur(3px); }
+.modal-content { background:#20271d; margin:5% auto; padding:20px; border:1px solid #4a5d43; width:90%; max-width:600px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,.7); max-height:86vh; overflow-y:auto; }
+.close-btn { color:#8fa87b; float:right; font-size:26px; font-weight:bold; cursor:pointer; line-height:1; }
+.close-btn:hover { color:#fff; }
+.howto-step { margin-top:10px; border-left:2px solid #5b7a47; padding-left:10px; margin-bottom:12px; }
+.howto-step strong { color:#8fa87b; font-size:.92rem; display:block; margin-bottom:2px; }
+.howto-step p { margin:0; font-size:.82rem; color:#cbd5c8; line-height:1.4; }
+.loader-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#ffcc00; margin-left:4px; animation:pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.2;} }
+/* Leaflet custom icons */
+.node-icon { width:24px; height:24px; border-radius:50%; border:2px solid #fff; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:bold; color:#fff; box-shadow:0 2px 6px rgba(0,0,0,.7); }
+</style>
+</head>
+<body>
+
+<div id="fallback-banner">⚠️ Falha ao obter elevação (Open-Elevation indisponível) — estimativa aproximada em uso.</div>
+<div id="placement-banner" onclick="cancelPlacement()">📍 Clique no mapa para posicionar o nó — <u>cancelar</u></div>
+
+<div id="howtoModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" onclick="closeHowTo()">&times;</span>
+    <h2 style="margin-top:0;color:#8fa87b;border-bottom:1px solid #4a5d43;padding-bottom:6px;">📖 Manual de Utilização e Modelo de Cálculo</h2>
+
+    <!-- ÍNDICE RÁPIDO -->
+    <div style="background:#151a12;border-radius:5px;padding:8px 12px;margin-bottom:12px;font-size:.78rem;line-height:1.8;">
+      <b style="color:#8fa87b;">Índice rápido:</b><br>
+      <a href="#sec-modos" onclick="document.getElementById('sec-modos').scrollIntoView()" style="color:#5b9a47;text-decoration:none;">1. Modos de operação</a> ·
+      <a href="#sec-radios" onclick="document.getElementById('sec-radios').scrollIntoView()" style="color:#5b9a47;text-decoration:none;">2. Transceptores A/B</a> ·
+      <a href="#sec-rede" onclick="document.getElementById('sec-rede').scrollIntoView()" style="color:#5b9a47;text-decoration:none;">3. Rede multi-nó</a> ·
+      <a href="#sec-veg" onclick="document.getElementById('sec-veg').scrollIntoView()" style="color:#5b9a47;text-decoration:none;">4. Vegetação</a> ·
+      <a href="#sec-calc" onclick="document.getElementById('sec-calc').scrollIntoView()" style="color:#5b9a47;text-decoration:none;">5. Modelo de cálculo</a> ·
+      <a href="#sec-cenarios" onclick="document.getElementById('sec-cenarios').scrollIntoView()" style="color:#5b9a47;text-decoration:none;">6. Cenários</a> ·
+      <a href="#sec-limites" onclick="document.getElementById('sec-limites').scrollIntoView()" style="color:#5b9a47;text-decoration:none;">7. Limitações</a>
+    </div>
+
+    <!-- 1. MODOS -->
+    <div id="sec-modos" style="color:#8fa87b;font-weight:bold;font-size:.95rem;border-left:3px solid #5b7a47;padding-left:8px;margin:10px 0 6px;">1. Modos de Operação</div>
+
+    <div class="howto-step">
+      <strong>🔗 Enlace Ponto a Ponto (A ↔ B)</strong>
+      <p>O modo principal. Coloque o <b>Rádio A</b> e o <b>Rádio B</b> no mapa com dois cliques. Arraste qualquer marcador para recalcular em tempo real. O sistema obtém a altitude real do terreno via API, traça o perfil de relevo no painel inferior, calcula a linha de vista (LOS) e aplica todas as penalidades activas (curvatura da Terra, zona de Fresnel, vegetação, condições atmosféricas). O <b>círculo de alcance</b> de cada rádio é desenhado com o raio já corrigido por todos os factores.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>🔁 Scanner de Cobertura 360º</strong>
+      <p>Lança <b>16 raios</b> a partir do Rádio A em todas as direcções, amostrando a elevação real do terreno em <b>5 pontos por raio</b>. Cada raio é truncado onde o terreno bloqueia a LOS. Se a vegetação estiver activa, aplica adicionalmente a penalidade de atenuação em cada raio. O resultado é um <b>polígono de cobertura real</b> — não um círculo perfeito — que reflecte a orografia e a vegetação à volta do emissor.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>🕸 Rede Multi-Nó (Matriz Completa)</strong>
+      <p>Activa um modo de planeamento de rede completo (ver secção 3).</p>
+    </div>
+
+    <!-- 2. TRANSCEPTORES -->
+    <div id="sec-radios" style="color:#8fa87b;font-weight:bold;font-size:.95rem;border-left:3px solid #5b7a47;padding-left:8px;margin:14px 0 6px;">2. Transceptores A e B — Emitem e Recebem</div>
+
+    <div class="howto-step">
+      <strong>📻 Ambos os rádios são bidireccional (Tx + Rx)</strong>
+      <p>Cada rádio pode emitir e receber simultaneamente. O enlace A↔B é sempre calculado nos <b>dois sentidos</b>: o alcance mostrado para A reflecte a capacidade de A alcançar B (limitado pela potência TX de A e pela altitude efectiva de A), e vice-versa para B. O <b>círculo verde</b> é o raio de A; o <b>círculo azul</b> é o raio de B — ambos já com vegetação e condições atmosféricas aplicados.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>⚙️ Equipamentos disponíveis</strong>
+      <p>
+        <b>PMR446 Padrão (0.5 W, 446 MHz):</b> rádio de uso livre na UE, sem licença. Alcance típico em campo aberto: 1–3 km.<br>
+        <b>Baofeng UV-5R (5 W) / UV-9R Pro (8 W):</b> handhelds VHF/UHF programáveis. Alcance melhorado mas requerem licença fora das bandas livres.<br>
+        <b>Quansheng UV-K5 / K6 / UV-5R Plus:</b> semelhantes ao Baofeng, com 5–7 W.<br>
+        <b>Motorola DP1400 (4 W):</b> equipamento profissional com melhor supressão de ruído.<br>
+        <b>Personalizado:</b> permite inserir qualquer valor de potência em Watts.
+      </p>
+    </div>
+
+    <div class="howto-step">
+      <strong>📡 Altura da Antena (Offset)</strong>
+      <p>Some à altitude do terreno nesse ponto. Usar 2 m para uma pessoa de pé, 10–30 m para um mastro, 1–3 m para o tecto de um veículo. Este valor entra directamente no cálculo do horizonte rádio e da linha de vista — <b>a altura da antena tem um impacto desproporcional no alcance</b>: duplicar a altura aumenta o horizonte rádio em √2 ≈ 41%.</p>
+    </div>
+
+    <!-- 3. REDE MULTI-NÓ -->
+    <div id="sec-rede" style="color:#8fa87b;font-weight:bold;font-size:.95rem;border-left:3px solid #5b7a47;padding-left:8px;margin:14px 0 6px;">3. Modo Rede Multi-Nó</div>
+
+    <div class="howto-step">
+      <strong>🟡 Base · 🟢 Patrulha · 🔵 Repetidor</strong>
+      <p>Pode colocar tantos nós quantos precisar. Cada nó tem o seu próprio modelo de rádio, potência e altura de antena. Os <b>Repetidores</b> têm tratamento especial: se o link directo entre dois nós estiver bloqueado, o sistema verifica automaticamente se algum repetidor intermédio tem LOS para ambos — se sim, o par aparece como <span class="status-relay">⟳ Via Repetidor</span> na matriz.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>📊 Matriz de Conetividade</strong>
+      <p>Tabela que cruza todos os nós e mostra o estado de cada enlace:</p>
+      <p>
+        <span class="status-good">✓ Directo</span> — LOS livre, dentro do alcance combinado.<br>
+        <span class="status-marginal">⚠ Marginal</span> — LOS com obstrução parcial da 1ª Zona de Fresnel (&gt;40%).<br>
+        <span class="status-relay">⟳ Via Repetidor</span> — Sem LOS directo, mas existe caminho por um nó intermediário.<br>
+        <span class="status-bad">✗ Bloqueado</span> — Terreno ou distância impedem qualquer comunicação.<br>
+        Uma célula com 🌲 indica que a vegetação reduziu o alcance efectivo nesse par.
+      </p>
+    </div>
+
+    <div class="howto-step">
+      <strong>⚡ Como funciona a análise da rede</strong>
+      <p>Todos os pares são analisados numa <b>única chamada em lote</b> à API de elevação, minimizando o tempo de espera. Para uma rede de N nós, são calculados N×(N−1)/2 pares. A detecção de relay é feita em O(N³) — adequado para redes de até ~20 nós.</p>
+    </div>
+
+    <!-- 4. VEGETAÇÃO -->
+    <div id="sec-veg" style="color:#8fa87b;font-weight:bold;font-size:.95rem;border-left:3px solid #5b7a47;padding-left:8px;margin:14px 0 6px;">4. Atenuação por Vegetação e Uso do Solo</div>
+
+    <div class="howto-step">
+      <strong>🌲 De onde vêm os dados</strong>
+      <p>A aplicação consulta o <b>Overpass API (OpenStreetMap)</b> em tempo real para obter os polígonos de vegetação na área do percurso. São incluídos: <code>natural=wood</code>, <code>landuse=forest</code>, <code>landuse=scrub</code>, <code>natural=scrub</code>, <code>landuse=orchard</code>, <code>landuse=vineyard</code> e <code>natural=heath</code>. Os polígonos são desenhados a verde semi-transparente no mapa.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>📐 Modelo de atenuação (baseado em ITU-R P.833)</strong>
+      <p>Para cada um dos 24 pontos amostrados ao longo do trajecto, é verificado via <b>ray-casting</b> se o ponto cai dentro de um polígono de vegetação. A atenuação acumula-se por segmento:</p>
+      <p style="background:#151a12;padding:6px 10px;border-radius:4px;font-family:monospace;font-size:.78rem;line-height:1.7;">
+        🌲 Floresta / Bosque densas: <b>−10 dB/km</b><br>
+        🌿 Mato / Scrub:             <b>−4 dB/km</b><br>
+        🍎 Pomar / Vinha:            <b>−3 dB/km</b><br>
+        🌾 Charneca / Heath:         <b>−2 dB/km</b>
+      </p>
+      <p>A atenuação total em dB converte-se em <b>multiplicador de alcance</b>: <code>m = 10^(−dB/20)</code>. Exemplos práticos: 1 km de floresta densa = −10 dB = alcance reduzido a ×0.32 (≈ 1/3); 500 m de mato = −2 dB = alcance ×0.79.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>📈 Perfil de relevo com vegetação</strong>
+      <p>O gráfico do painel inferior mostra uma <b>faixa colorida no topo</b> onde há vegetação ao longo do percurso, e colunas verdes sobrepostas ao perfil de terreno nos segmentos afectados. A linha de vista é sobreposta a tudo.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>⚠️ Nota importante</strong>
+      <p>A cobertura do OSM para vegetação é boa em Portugal e Europa mas pode estar incompleta em zonas rurais remotas. A API Overpass tem um timeout de 20 segundos — se não responder, a vegetação é ignorada sem afectar o resto do cálculo.</p>
+    </div>
+
+    <!-- 5. MODELO DE CÁLCULO -->
+    <div id="sec-calc" style="color:#8fa87b;font-weight:bold;font-size:.95rem;border-left:3px solid #5b7a47;padding-left:8px;margin:14px 0 6px;">5. Modelo de Cálculo do Alcance e LOS</div>
+
+    <div class="howto-step">
+      <strong>📡 Horizonte Rádio (curvatura efectiva da Terra)</strong>
+      <p>O alcance máximo teórico é determinado pelo horizonte rádio, que depende da altura efectiva da antena. Não se usa o raio real da Terra (6 371 km) mas o <b>raio efectivo k=4/3</b> (8 495 km), que incorpora a refração atmosférica padrão que "dobra" ligeiramente o sinal para baixo:</p>
+      <p style="background:#151a12;padding:6px 10px;border-radius:4px;font-family:monospace;font-size:.78rem;">
+        d_horizonte (km) = 4.12 × √h_efectiva (m)
+      </p>
+      <p>Exemplo: antena a 10 m de altura → horizonte rádio de ≈ 13 km. A 100 m → ≈ 41 km. A potência TX influencia se o sinal chega com qualidade suficiente dentro desse horizonte.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>⚡ Factor de potência</strong>
+      <p>A potência TX afecta a <b>margem de link</b> — a mesma distância com mais potência dá um sinal mais forte. O modelo aplica um factor empírico <code>0.9 + 0.85 × √P</code> normalizado, que reflecte a lei quadrática inversa (dobrar a potência não duplica o alcance — apenas aumenta ≈ 41%). No PMR de 0.5 W, o alcance prático fica muito mais limitado pela linha de vista do que pela potência em si.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>🗻 Linha de Vista Real (LOS) com Elevação Real</strong>
+      <p>O terreno entre A e B é amostrado em <b>24 pontos equidistantes</b> via <b>Open-Elevation API</b> (dados SRTM de 90 m de resolução). Em cada ponto intermédio calcula-se:</p>
+      <p style="background:#151a12;padding:6px 10px;border-radius:4px;font-family:monospace;font-size:.78rem;line-height:1.6;">
+        h_linha(d) = h_A + (h_B − h_A) × (d/D) − (d × (D−d)) / (2 × R_ef) × 1000<br>
+        clearance = h_linha(d) − h_terreno(d)
+      </p>
+      <p>O segundo termo é a <b>correcção de curvatura</b> da Terra. Se <code>clearance &lt; 0</code> em qualquer ponto intermédio → link <span class="status-bad">BLOQUEADO</span>.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>📶 1ª Zona de Fresnel (446 MHz)</strong>
+      <p>Mesmo com LOS geometricamente livre, o sinal pode ser degradado se o terreno invadir a <b>zona elipsoidal de Fresnel</b> — a região do espaço onde a reflexão de ondas contribui construtivamente para o sinal recebido. O raio da 1ª zona a cada ponto é:</p>
+      <p style="background:#151a12;padding:6px 10px;border-radius:4px;font-family:monospace;font-size:.78rem;">
+        r₁(m) = 17.3 × √((d₁ × d₂) / (f_GHz × D))
+      </p>
+      <p>Se o terreno invadir <b>&gt;40%</b> do raio de Fresnel → link <span class="status-marginal">MARGINAL</span>. Se invadir 0–40% → link é considerado bom (a degradação é inferior a ~3 dB). A 446 MHz a zona de Fresnel é mais larga do que em frequências mais altas, pelo que exige maior clearance.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>☁️ Condições Atmosféricas</strong>
+      <p>Aplicado como um multiplicador final sobre o alcance calculado:<br>
+      <b>Céu Limpo:</b> ×1.0 (sem penalidade)<br>
+      <b>Chuva / Nevoeiro:</b> ×0.85 (−15%)<br>
+      <b>Tempestade Eléctrica:</b> ×0.60 (−40%, inclui absorção da chuva intensa e ruído adicional)</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>🔢 Fórmula final combinada</strong>
+      <p style="background:#151a12;padding:8px 12px;border-radius:4px;font-family:monospace;font-size:.78rem;line-height:1.8;color:#a4bfa3;">
+        h_ef = h_terreno + h_antena<br>
+        r_base = (4.12 × √h_ef) × f(Potência) × f(Atmosfera)<br>
+        r_final = r_base × m_vegetação<br>
+        m_vegetação = 10^(−dB_vegetação_total / 20)<br>
+        <span style="color:#5b7a47;">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span><br>
+        Link OK se: r_A ≥ dist AND r_B ≥ dist AND LOS livre AND Fresnel &lt;40%
+      </p>
+    </div>
+
+    <!-- 6. CENÁRIOS -->
+    <div id="sec-cenarios" style="color:#8fa87b;font-weight:bold;font-size:.95rem;border-left:3px solid #5b7a47;padding-left:8px;margin:14px 0 6px;">6. Cenários — Guardar, Partilhar e Importar</div>
+
+    <div class="howto-step">
+      <strong>💾 Guardar em localStorage (sem internet)</strong>
+      <p>O botão <b>💾 Guardar</b> grava a disposição completa dos nós (nome, tipo, coordenadas, altitude, modelo, potência, offset) no armazenamento local do browser. Os cenários <b>persistem sem internet</b> e sem conta — útil para preparar o plano de comunicações em casa e abrir o simulador no campo sem ligação.</p>
+    </div>
+
+    <div class="howto-step">
+      <strong>⬇ Exportar / ⬆ Importar JSON</strong>
+      <p>O ficheiro JSON exportado contém todos os parâmetros da rede e pode ser partilhado com outros membros da equipa (email, USB, etc.). Para importar, basta escolher o ficheiro — a rede é reconstituída automaticamente. O modo de operação muda para <b>Rede Multi-Nó</b> automaticamente ao carregar.</p>
+    </div>
+
+    <!-- 7. LIMITAÇÕES -->
+    <div id="sec-limites" style="color:#8fa87b;font-weight:bold;font-size:.95rem;border-left:3px solid #5b7a47;padding-left:8px;margin:14px 0 6px;">7. Limitações e Avisos</div>
+
+    <div class="howto-step">
+      <strong>⚠️ Este simulador é uma aproximação</strong>
+      <p>
+        <b>Resolução do terreno:</b> a API Open-Elevation usa dados SRTM 3 arc-second (~90 m de resolução). Elevações locais (casas, muros, vegetação alta) não estão incluídas no MDT.<br><br>
+        <b>Vegetação OSM:</b> a cobertura do OSM varia — zonas rurais podem ter lacunas. As perdas por vegetação são estimativas baseadas em literatura (ITU-R P.833) e variam com a espécie, densidade e estação do ano.<br><br>
+        <b>Propagação por reflexão / difracção:</b> o modelo não considera multi-path, reflexões em edifícios/água, ou difracção em bordas de crista — que na prática podem melhorar ligações que o simulador classifica como bloqueadas.<br><br>
+        <b>Ruído e interferência:</b> não estão modelados o ruído de fundo, co-canal, ou intermodulação.<br><br>
+        <b>Modo de falha offline:</b> se as APIs de elevação e vegetação estiverem indisponíveis, o simulador usa estimativas de fallback (ruído baseado em coordenadas) e avisa com banner no topo. Os cenários JSON continuam funcionais sem internet.
+      </p>
+    </div>
+
+    <button class="btn-calc" style="margin-top:14px;" onclick="closeHowTo()">✅ Entendido — Fechar Guia</button>
+  </div>
+</div>
+
+<div class="main-container">
+  <div id="sidebar">
+    <h2>Simulador Rádio PMR/VHF/UHF</h2>
+    <button class="btn-howto" onclick="openHowTo()">📖 Como Funciona</button>
+
+    <div class="control-group">
+      <h3>Modo & Visualização</h3>
+      <label>Modo de Operação:</label>
+      <select id="analysis-mode" onchange="changeAnalysisMode()">
+        <option value="link" selected>Enlace Ponto a Ponto (A ↔ B)</option>
+        <option value="scanner">Scanner de Cobertura 360º</option>
+        <option value="network">Rede Multi-Nó (Matriz Completa)</option>
+      </select>
+      <label style="margin-top:4px;">Estilo do Mapa:</label>
+      <select id="map-style" onchange="changeMapStyle()">
+        <option value="dark" selected>Modo Escuro (CartoDB)</option>
+        <option value="standard">Modo Clássico (OSM)</option>
+        <option value="topo">Topográfico / Relevo (OpenTopo)</option>
+      </select>
+      <label class="checkbox-container" style="margin-top:2px;">
+        <input type="checkbox" id="show-repeaters" onchange="toggleRepeaters()">
+        <span>Mostrar repetidores de referência (estáticos)</span>
+      </label>
+    </div>
+
+    <!-- LINK MODE PANELS -->
+    <div id="link-panels">
+      <div class="control-group">
+        <h3>🟢 Rádio A — Transceptor (emite e recebe)</h3>
+        <div class="row-inputs" style="margin-bottom:2px;">
+          <div style="flex:2"><label>Nome / Callsign:</label><input type="text" id="radioA-name" value="Alpha" maxlength="20" oninput="updateMarkerPopup('A')"></div>
+          <div style="flex:1"><label>Cor:</label>
+            <select id="radioA-color" onchange="updateMarkerPopup('A')">
+              <option value="#4eff4e" selected>Verde</option>
+              <option value="#ffcc00">Amarelo</option>
+              <option value="#00c3ff">Azul</option>
+              <option value="#ff9900">Laranja</option>
+            </select>
+          </div>
+        </div>
+        <label>Equipamento:</label>
+        <select id="radioA-model" onchange="updatePower('A')">
+          <option value="pmr-standard" selected>PMR446 Padrão (0.5W, 446MHz)</option>
+          <option value="baofeng-uv5r">Baofeng UV-5R (5W, VHF/UHF)</option>
+          <option value="baofeng-uv9r">Baofeng UV-9R Pro (8W, VHF/UHF)</option>
+          <option value="quansheng-uvk5">Quansheng UV-K5 (5W, VHF/UHF)</option>
+          <option value="quansheng-uvk6">Quansheng UV-K6 (5W, VHF/UHF)</option>
+          <option value="quansheng-uv5rplus">Quansheng UV-5R Plus (7W, VHF/UHF)</option>
+          <option value="motorola-dp1400">Motorola DP1400 (4W, profissional)</option>
+          <option value="custom">Personalizado...</option>
+        </select>
+        <div class="row-inputs">
+          <div><label>Potência TX (W):</label><input type="number" id="radioA-power" value="0.5" step="0.1" min="0.1" oninput="triggerRecalculate()"></div>
+          <div><label>Altura Antena (m):</label><input type="number" id="radioA-offset" value="0" min="0" oninput="triggerRecalculate()"></div>
+        </div>
+        <div id="altitudeA" class="altitude-badge">Altitude: -- m</div>
+      </div>
+      <div class="control-group" id="sidebar-radioB-group">
+        <h3>🔵 Rádio B — Transceptor (emite e recebe)</h3>
+        <div class="row-inputs" style="margin-bottom:2px;">
+          <div style="flex:2"><label>Nome / Callsign:</label><input type="text" id="radioB-name" value="Bravo" maxlength="20" oninput="updateMarkerPopup('B')"></div>
+          <div style="flex:1"><label>Cor:</label>
+            <select id="radioB-color" onchange="updateMarkerPopup('B')">
+              <option value="#00c3ff" selected>Azul</option>
+              <option value="#4eff4e">Verde</option>
+              <option value="#ffcc00">Amarelo</option>
+              <option value="#ff9900">Laranja</option>
+            </select>
+          </div>
+        </div>
+        <label>Equipamento:</label>
+        <select id="radioB-model" onchange="updatePower('B')">
+          <option value="pmr-standard">PMR446 Padrão (0.5W, 446MHz)</option>
+          <option value="baofeng-uv5r" selected>Baofeng UV-5R (5W, VHF/UHF)</option>
+          <option value="baofeng-uv9r">Baofeng UV-9R Pro (8W, VHF/UHF)</option>
+          <option value="quansheng-uvk5">Quansheng UV-K5 (5W, VHF/UHF)</option>
+          <option value="quansheng-uvk6">Quansheng UV-K6 (5W, VHF/UHF)</option>
+          <option value="quansheng-uv5rplus">Quansheng UV-5R Plus (7W, VHF/UHF)</option>
+          <option value="motorola-dp1400">Motorola DP1400 (4W, profissional)</option>
+          <option value="custom">Personalizado...</option>
+        </select>
+        <div class="row-inputs">
+          <div><label>Potência TX (W):</label><input type="number" id="radioB-power" value="5.0" step="0.1" min="0.1" oninput="triggerRecalculate()"></div>
+          <div><label>Altura Antena (m):</label><input type="number" id="radioB-offset" value="0" min="0" oninput="triggerRecalculate()"></div>
+        </div>
+        <div id="altitudeB" class="altitude-badge">Altitude: -- m</div>
+      </div>
+      <div class="control-group">
+        <h3>Condições Reais de Propagação</h3>
+        <label>Atmosfera:</label>
+        <select id="weather" onchange="triggerRecalculate()">
+          <option value="1.0">Céu Limpo</option>
+          <option value="0.85">Chuva Ligeira / Nevoeiro</option>
+          <option value="0.60">Chuva Forte / Tempestade</option>
+        </select>
+        <label class="checkbox-container" style="margin-top:5px;">
+          <input type="checkbox" id="use-vegetation" onchange="triggerRecalculate()" checked>
+          <span>🌲 Atenuação por vegetação (OSM — floresta, mato, pomar)</span>
+        </label>
+        <div id="veg-status" style="display:none;font-size:.7rem;padding:3px 5px;border-radius:3px;margin-top:2px;"></div>
+        <div id="veg-legend" style="display:none;font-size:.68rem;color:#7d9474;margin-top:2px;line-height:1.5;">
+          <span style="color:#2d9a1b">█</span> Floresta/Bosque: −10 dB/km &nbsp;
+          <span style="color:#6da83a">█</span> Mato/Scrub: −4 dB/km &nbsp;
+          <span style="color:#8aba4a">█</span> Pomar/Vinha: −2 dB/km
+        </div>
+      </div>
+      <button class="btn-calc" onclick="triggerRecalculate()">Processar Análise <span id="loader" style="display:none;" class="loader-dot"></span></button>
+      <button class="btn-export" id="btn-export-id" onclick="exportReport()">Exportar Relatório TXT</button>
+      <div id="results">
+        <strong>Resultados:</strong>
+        <div id="res-distance">Distância: --</div>
+        <div id="res-diff-alt">Diferença Altimétrica: --</div>
+        <div id="res-max-range">Alcance: --</div>
+        <div id="res-quality">Qualidade: --</div>
+        <div id="res-fresnel" class="fresnel-note">Zona de Fresnel: --</div>
+        <div id="res-vegetation" class="fresnel-note" style="color:#4eb84e;">🌲 Vegetação: --</div>
+      </div>
+    </div>
+
+    <!-- NETWORK MODE PANEL -->
+    <div id="network-panel" style="display:none; flex-direction:column; gap:7px;">
+      <div class="control-group">
+        <h3>Adicionar Nó à Rede</h3>
+        <div class="row-inputs">
+          <div style="flex:2">
+            <label>Nome do Nó:</label>
+            <input type="text" id="net-node-name" value="Base Alpha" maxlength="20">
+          </div>
+          <div style="flex:1">
+            <label>Tipo:</label>
+            <select id="net-node-type">
+              <option value="base">🟡 Base</option>
+              <option value="field" selected>🟢 Patrulha</option>
+              <option value="repeater">🔵 Repetidor</option>
+            </select>
+          </div>
+        </div>
+        <label>Equipamento:</label>
+        <select id="net-node-model" onchange="updateNetNodePower()">
+          <option value="pmr-standard">PMR446 Padrão (0.5W)</option>
+          <option value="baofeng-uv5r" selected>Baofeng UV-5R (5W)</option>
+          <option value="baofeng-uv9r">Baofeng UV-9R Pro (8W)</option>
+          <option value="quansheng-uvk5">Quansheng UV-K5 (5W)</option>
+          <option value="quansheng-uvk6">Quansheng UV-K6 (5W)</option>
+          <option value="quansheng-uv5rplus">Quansheng UV-5R Plus (7W)</option>
+          <option value="motorola-dp1400">Motorola DP1400 (4W)</option>
+          <option value="custom">Personalizado...</option>
+        </select>
+        <div class="row-inputs">
+          <div><label>Potência (W):</label><input type="number" id="net-node-power" value="5.0" step="0.1" min="0.1"></div>
+          <div><label>Offset (m):</label><input type="number" id="net-node-offset" value="0" min="0"></div>
+        </div>
+        <button class="btn-place" id="btn-place-node" onclick="startPlacingNode()">📍 Colocar no Mapa</button>
+      </div>
+
+      <div class="control-group">
+        <h3>Nós na Rede <span id="net-node-count" style="color:#7d9474;font-size:.75rem;">(0 nós)</span></h3>
+        <div id="node-list" style="display:flex;flex-direction:column;gap:4px;min-height:20px;">
+          <div style="color:#445041;font-size:.75rem;font-style:italic;">Nenhum nó posicionado ainda.</div>
+        </div>
+        <div class="btn-row" style="margin-top:4px;">
+          <button class="btn-calc" onclick="runNetworkAnalysis()">⚡ Analisar Rede <span id="net-loader" style="display:none;" class="loader-dot"></span></button>
+          <button class="btn-danger" onclick="clearNetwork()">🗑 Limpar</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>Condições Atmosféricas</h3>
+        <select id="net-weather">
+          <option value="1.0">Céu Limpo</option>
+          <option value="0.85">Chuva Ligeira / Nevoeiro</option>
+          <option value="0.60">Chuva Forte / Tempestade</option>
+        </select>
+        <label class="checkbox-container" style="margin-top:5px;">
+          <input type="checkbox" id="net-use-vegetation" checked>
+          <span>🌲 Atenuação por vegetação (OSM)</span>
+        </label>
+        <div id="net-veg-status" style="display:none;font-size:.7rem;padding:3px 5px;border-radius:3px;margin-top:2px;"></div>
+      </div>
+
+    </div><!-- /network-panel -->
+
+    <!-- CENÁRIOS — sempre visível -->
+    <div class="control-group">
+      <h3>💾 Cenários</h3>
+      <div class="scenario-row">
+        <input type="text" id="scenario-name" placeholder="Nome do cenário..." value="Plano Alfa">
+        <button class="btn-neutral" style="width:auto;padding:5px 10px;flex-shrink:0;" onclick="saveScenario()" title="Guardar cenário actual">💾 Guardar</button>
+      </div>
+      <select id="scenario-list" style="margin-top:4px;" onchange="previewScenario()">
+        <option value="">— Selecionar cenário gravado —</option>
+      </select>
+      <div class="btn-row" style="margin-top:4px;">
+        <button class="btn-neutral" onclick="loadScenario()">📂 Carregar</button>
+        <button class="btn-danger" onclick="deleteScenario()">🗑 Apagar</button>
+      </div>
+      <div class="btn-row" style="margin-top:4px;">
+        <button class="btn-export" onclick="exportScenarioJSON()">⬇ Exportar JSON</button>
+        <label style="flex:1;margin:0;">
+          <button class="btn-neutral" onclick="document.getElementById('import-json').click()" style="width:100%;">⬆ Importar JSON</button>
+          <input type="file" id="import-json" accept=".json" style="display:none;" onchange="importScenarioJSON(event)">
+        </label>
+      </div>
+    </div>
+
+  </div>
+  <div id="map"></div>
+</div>
+
+<div class="bottom-section">
+  <div class="log-box">
+    <div class="log-title" id="panel-bottom-title">Consola de Diagnóstico</div>
+    <div id="log-output">A aguardar posicionamento dos rádios no mapa...</div>
+  </div>
+  <div class="profile-box" id="profile-chart-container">
+    <div class="log-title">Perfil de Relevo + Linha de Vista (Fresnel)</div>
+    <svg id="profile-svg" viewBox="0 0 300 100" preserveAspectRatio="none">
+      <text x="20" y="55" fill="#445041" font-size="7" font-family="monospace">Nenhum enlace activo</text>
+    </svg>
+  </div>
+  <!-- Network matrix panel (hidden by default) -->
+  <div id="matrix-panel" style="display:none; flex:1; padding:8px; flex-direction:column; overflow:hidden;">
+    <div class="log-title">Matriz de Conetividade da Rede</div>
+    <div id="matrix-container"><div style="color:#445041;font-size:.75rem;padding:6px;">Analisar a rede para ver a matriz.</div></div>
+  </div>
+</div>
+
+<footer>Simulador PMR/VHF/UHF — modelo aproximado para fins informativos. Não substitui estudo de propagação profissional.</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+let map, baseTileLayer;
+let markerA = null, markerB = null;
+let polylineLink = null, obstacleMarker = null;
+let circleA = null, circleB = null, scanPolygon = null;
+let altA = 0, altB = 0, nameA = "Ponto A", nameB = "Ponto B";
+let currentCalculatedData = null;
+let repeaterLayer = null;
+let busy = false;
+
+// Network mode state
+let networkNodes = [];       // array of node objects
+let networkLayers = [];      // all leaflet layers added in network mode
+let isPlacingNode = false;
+let nextNodeId = 1;
+
+const NODE_COLORS = { base: '#f5c518', field: '#4eff4e', repeater: '#00c3ff' };
+const NODE_LABELS = { base: '🟡 Base', field: '🟢 Patrulha', repeater: '🔵 Repetidor' };
+
+// ══════════════════════════════════════════════════════
+//  VEGETATION STATE & CONSTANTS
+// ══════════════════════════════════════════════════════
+// Atenuação extra em dB/km para UHF ~446 MHz (baseada em literatura ITU-R P.833)
+const VEG_ATT_DB_KM = { wood:10, forest:10, scrub:4, orchard:3, vineyard:2, heath:2, grassland:0.5 };
+const VEG_COLORS    = { wood:'#1a6b0f', forest:'#1a6b0f', scrub:'#5a8a2a', orchard:'#7aaa3a', vineyard:'#8aaa3a', heath:'#5a7a3a' };
+const VEG_NAMES_PT  = { wood:'Bosque/Mata', forest:'Floresta', scrub:'Mato/Matagal', orchard:'Pomar', vineyard:'Vinha', heath:'Charneca' };
+let vegetationPolygons = [];  // cached polygon list
+let vegCacheBbox = null;      // bbox that was last fetched
+let vegMapLayer  = null;      // leaflet layer for overlay
+
+const referenceRepeaters = [
+    { indicativo:"REP-ESTRELA", localizacao:"Serra da Estrela", freq:"145.600 MHz", tipo:"VHF", lat:40.3218, lng:-7.6129, cor:"cyan" },
+    { indicativo:"REP-MONSANTO", localizacao:"Monsanto (Lisboa)", freq:"438.800 MHz", tipo:"UHF", lat:38.7394, lng:-9.1842, cor:"magenta" },
+    { indicativo:"REP-MARAO", localizacao:"Serra do Marão", freq:"145.750 MHz", tipo:"VHF", lat:41.2655, lng:-7.9012, cor:"cyan" },
+    { indicativo:"REP-CALDEIRAO", localizacao:"Serra do Caldeirão", freq:"439.200 MHz", tipo:"UHF", lat:37.3050, lng:-7.9700, cor:"magenta" }
+];
+
+const powerMap = {
+    'pmr-standard':0.5,'baofeng-uv5r':5.0,'baofeng-uv9r':8.0,
+    'quansheng-uvk5':5.0,'quansheng-uvk6':5.0,'quansheng-uv5rplus':7.0,
+    'motorola-dp1400':4.0
+};
+
+const mapStyles = {
+    dark:"https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    standard:"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    topo:"https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+};
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+window.onload = function() {
+    map = L.map('map').setView([39.5,-8.0],7);
+    baseTileLayer = L.tileLayer(mapStyles.dark,{maxZoom:17}).addTo(map);
+    repeaterLayer = L.layerGroup();
+    setTimeout(()=>map.invalidateSize(),200);
+    updatePower('A'); updatePower('B'); updateNetNodePower();
+    loadScenarioList();
+
+    map.on('click', function(e) {
+        const mode = document.getElementById('analysis-mode').value;
+        if (mode === 'network') {
+            if (isPlacingNode) { placeNetworkNode(e.latlng); }
+            return;
+        }
+        if (!markerA) {
+            markerA = L.marker(e.latlng,{draggable:true}).addTo(map);
+            getAltitude(e.latlng.lat,e.latlng.lng,'A');
+            markerA.on('dragend',ev=>getAltitude(ev.target.getLatLng().lat,ev.target.getLatLng().lng,'A'));
+        } else if (!markerB && mode==='link') {
+            markerB = L.marker(e.latlng,{draggable:true}).addTo(map);
+            getAltitude(e.latlng.lat,e.latlng.lng,'B');
+            markerB.on('dragend',ev=>getAltitude(ev.target.getLatLng().lat,ev.target.getLatLng().lng,'B'));
+        } else if (mode==='link') {
+            markerB.setLatLng(e.latlng); getAltitude(e.latlng.lat,e.latlng.lng,'B');
+        } else {
+            markerA.setLatLng(e.latlng); getAltitude(e.latlng.lat,e.latlng.lng,'A');
+        }
+    });
+};
+
+// ══════════════════════════════════════════════════════
+//  MODAL
+// ══════════════════════════════════════════════════════
+function openHowTo() { document.getElementById('howtoModal').style.display='block'; }
+function closeHowTo() { document.getElementById('howtoModal').style.display='none'; }
+window.onclick = e => { if(e.target===document.getElementById('howtoModal')) closeHowTo(); };
+
+// ══════════════════════════════════════════════════════
+//  MODE SWITCHING
+// ══════════════════════════════════════════════════════
+function changeAnalysisMode() {
+    const mode = document.getElementById('analysis-mode').value;
+    const isNet = mode === 'network';
+    const isScanner = mode === 'scanner';
+
+    // Show/hide sidebar sections
+    document.getElementById('link-panels').style.display = isNet ? 'none' : 'flex';
+    document.getElementById('link-panels').style.flexDirection = 'column';
+    document.getElementById('link-panels').style.gap = '7px';
+    document.getElementById('network-panel').style.display = isNet ? 'flex' : 'none';
+    document.getElementById('sidebar-radioB-group').style.display = isScanner ? 'none' : '';
+
+    // Show/hide bottom panels
+    document.getElementById('profile-chart-container').style.display = isNet ? 'none' : 'flex';
+    document.getElementById('matrix-panel').style.display = isNet ? 'flex' : 'none';
+    document.getElementById('matrix-panel').style.flexDirection = isNet ? 'column' : '';
+
+    // Bottom log title
+    document.getElementById('panel-bottom-title').innerText = isNet
+        ? 'Relatório de Enlace Detalhado'
+        : isScanner ? 'Consola de Cobertura 360º' : 'Consola de Diagnóstico';
+
+    // Clear non-network map layers
+    clearLinkLayers();
+
+    if (isNet) {
+        // Remove A/B markers from map
+        if (markerA) { map.removeLayer(markerA); markerA=null; }
+        if (markerB) { map.removeLayer(markerB); markerB=null; }
+        renderNodeListUI();
+    } else {
+        // Remove network layers
+        clearNetworkLayers();
+        cancelPlacement();
+    }
+}
+
+function clearLinkLayers() {
+    if (polylineLink) { map.removeLayer(polylineLink); polylineLink=null; }
+    if (obstacleMarker) { map.removeLayer(obstacleMarker); obstacleMarker=null; }
+    if (circleA) { map.removeLayer(circleA); circleA=null; }
+    if (circleB) { map.removeLayer(circleB); circleB=null; }
+    if (scanPolygon) { map.removeLayer(scanPolygon); scanPolygon=null; }
+    // Vegetation overlay is kept across link/scanner (intentional — shows context)
+}
+
+function clearNetworkLayers() {
+    networkLayers.forEach(l=>{ try{map.removeLayer(l);}catch(e){} });
+    networkLayers=[];
+    if (vegMapLayer) { try{map.removeLayer(vegMapLayer);}catch(e){} vegMapLayer=null; }
+    vegetationPolygons=[]; vegCacheBbox=null;
+}
+
+function changeMapStyle() { baseTileLayer.setUrl(mapStyles[document.getElementById('map-style').value]); }
+
+// ══════════════════════════════════════════════════════
+//  POWER / ALTITUDE HELPERS
+// ══════════════════════════════════════════════════════
+function updatePower(radio) {
+    const model = document.getElementById(`radio${radio}-model`).value;
+    const inp = document.getElementById(`radio${radio}-power`);
+    if (model!=='custom') { inp.value=powerMap[model]||0.5; inp.disabled=true; } else inp.disabled=false;
+    triggerRecalculate();
+}
+
+function updateNetNodePower() {
+    const model = document.getElementById('net-node-model').value;
+    const inp = document.getElementById('net-node-power');
+    if (model!=='custom') { inp.value=powerMap[model]||0.5; inp.disabled=true; } else inp.disabled=false;
+}
+
+async function getAltitude(lat, lng, target) {
+    await fetchLocationName(lat,lng,target);
+    const elevs = await batchElevation([{lat,lng}]);
+    if (target==='A') altA=Math.round(elevs[0]);
+    else altB=Math.round(elevs[0]);
+    refreshAltitudeBadges();
+    updateMarkerPopup(target);
+    triggerRecalculate();
+}
+
+function getModelLabel(modelVal) {
+    const labels = {
+        'pmr-standard':'PMR446 Padrão','baofeng-uv5r':'Baofeng UV-5R','baofeng-uv9r':'Baofeng UV-9R Pro',
+        'quansheng-uvk5':'Quansheng UV-K5','quansheng-uvk6':'Quansheng UV-K6',
+        'quansheng-uv5rplus':'Quansheng UV-5R Plus','motorola-dp1400':'Motorola DP1400','custom':'Personalizado'
+    };
+    return labels[modelVal]||modelVal;
+}
+
+function buildPopupHTML(target, lat, lng) {
+    const isA = target==='A';
+    const name = isA ? (document.getElementById('radioA-name')||{value:'Alpha'}).value||'Alpha'
+                     : (document.getElementById('radioB-name')||{value:'Bravo'}).value||'Bravo';
+    const color = isA ? (document.getElementById('radioA-color')||{value:'#4eff4e'}).value
+                      : (document.getElementById('radioB-color')||{value:'#00c3ff'}).value;
+    const alt = isA ? altA : altB;
+    const off = parseInt(document.getElementById(isA?'radioA-offset':'radioB-offset').value)||0;
+    const power = parseFloat(document.getElementById(isA?'radioA-power':'radioB-power').value)||0;
+    const model = getModelLabel(document.getElementById(isA?'radioA-model':'radioB-model').value);
+    const locName = isA ? nameA : nameB;
+    const effAlt = alt + off;
+    return `
+      <div style="font-family:'Segoe UI',sans-serif;min-width:200px;font-size:12px;line-height:1.5;">
+        <div style="background:${color}22;border-left:3px solid ${color};padding:4px 7px;margin-bottom:6px;">
+          <b style="color:${color};font-size:13px;">📻 ${name} (Rádio ${target})</b><br>
+          <span style="color:#aaa;font-size:11px;">${model}</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="color:#888;padding:1px 4px;">📍 Localização</td><td style="padding:1px 4px;font-size:11px;">${locName.split(',').slice(0,2).join(',')}</td></tr>
+          <tr><td style="color:#888;padding:1px 4px;">🌐 Latitude</td><td style="padding:1px 4px;font-family:monospace;">${lat.toFixed(6)}°</td></tr>
+          <tr><td style="color:#888;padding:1px 4px;">🌐 Longitude</td><td style="padding:1px 4px;font-family:monospace;">${lng.toFixed(6)}°</td></tr>
+          <tr><td style="color:#888;padding:1px 4px;">⛰ Alt. Terreno</td><td style="padding:1px 4px;"><b>${alt} m</b></td></tr>
+          <tr><td style="color:#888;padding:1px 4px;">📡 Alt. Antena</td><td style="padding:1px 4px;">+${off} m (Total: <b>${effAlt} m</b>)</td></tr>
+          <tr><td style="color:#888;padding:1px 4px;">⚡ Potência TX</td><td style="padding:1px 4px;"><b>${power} W</b></td></tr>
+          <tr><td style="color:#888;padding:1px 4px;">↔ Função</td><td style="padding:1px 4px;">Emissor e Recetor</td></tr>
+        </table>
+        <div style="margin-top:5px;padding:3px 7px;background:#1a2417;border-radius:3px;font-size:10px;color:#7d9474;">
+          Arraste para reposicionar — altitude actualiza automaticamente
+        </div>
+      </div>`;
+}
+
+function updateMarkerPopup(target) {
+    if (target==='A' && markerA) {
+        const ll=markerA.getLatLng();
+        markerA.bindPopup(buildPopupHTML('A',ll.lat,ll.lng),{maxWidth:260});
+    }
+    if (target==='B' && markerB) {
+        const ll=markerB.getLatLng();
+        markerB.bindPopup(buildPopupHTML('B',ll.lat,ll.lng),{maxWidth:260});
+    }
+}
+
+function refreshAltitudeBadges() {
+    const offA=parseInt(document.getElementById('radioA-offset').value)||0;
+    const offB=parseInt(document.getElementById('radioB-offset').value)||0;
+    document.getElementById('altitudeA').innerText=`⛰ Terreno: ${altA}m  +  📡 Antena: ${offA}m  =  ${altA+offA}m efectivos`;
+    document.getElementById('altitudeB').innerText=`⛰ Terreno: ${altB}m  +  📡 Antena: ${offB}m  =  ${altB+offB}m efectivos`;
+}
+
+async function fetchLocationName(lat,lng,target) {
+    try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=12`);
+        const d = await r.json();
+        if (d && d.display_name) {
+            const short = d.display_name.split(',').slice(0,2).join(',');
+            if(target==='A') nameA=short; else nameB=short;
+        }
+    } catch(e){}
+}
+
+// ══════════════════════════════════════════════════════
+//  ELEVATION API
+// ══════════════════════════════════════════════════════
+async function batchElevation(coordsArray) {
+    try {
+        const res = await fetch('https://api.open-elevation.com/api/v1/lookup',{
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({locations: coordsArray.map(c=>({latitude:c.lat,longitude:c.lng}))})
+        });
+        if (!res.ok) throw new Error('http '+res.status);
+        const data = await res.json();
+        document.getElementById('fallback-banner').style.display='none';
+        return data.results.map(r=>r.elevation);
+    } catch(e) {
+        document.getElementById('fallback-banner').style.display='block';
+        return coordsArray.map(c=>80+60*Math.abs(Math.sin(c.lat*12.9898+c.lng*78.233)*43758.5453%1));
+    }
+}
+
+// ══════════════════════════════════════════════════════
+//  VEGETATION — FETCH / PARSE / GEOMETRY / ATTENUATION
+// ══════════════════════════════════════════════════════
+
+function pathBbox(posA, posB, padDeg=0.03) {
+    return {
+        s: Math.min(posA.lat, posB.lat) - padDeg,
+        w: Math.min(posA.lng, posB.lng) - padDeg,
+        n: Math.max(posA.lat, posB.lat) + padDeg,
+        e: Math.max(posA.lng, posB.lng) + padDeg
+    };
+}
+
+function bboxFromNodes(nodes, padDeg=0.03) {
+    return {
+        s: Math.min(...nodes.map(n=>n.lat)) - padDeg,
+        w: Math.min(...nodes.map(n=>n.lng)) - padDeg,
+        n: Math.max(...nodes.map(n=>n.lat)) + padDeg,
+        e: Math.max(...nodes.map(n=>n.lng)) + padDeg
+    };
+}
+
+function setVegStatus(elId, msg, isLoading) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (!msg) { el.style.display='none'; return; }
+    el.style.display = 'block';
+    el.innerText = msg;
+    el.style.background = isLoading ? '#2b2b00' : '#0d2b0d';
+    el.style.color = isLoading ? '#ffcc00' : '#4eb84e';
+}
+
+async function fetchVegetationForBbox(bbox, statusElId='veg-status') {
+    // Round bbox to 3 decimals to enable caching across nearby queries
+    const key = [bbox.s,bbox.w,bbox.n,bbox.e].map(v=>v.toFixed(3)).join(',');
+    if (vegCacheBbox === key) return vegetationPolygons;
+
+    const q = `[out:json][timeout:20];(` +
+        `way["natural"="wood"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});` +
+        `way["landuse"="forest"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});` +
+        `way["landuse"="scrub"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});` +
+        `way["natural"="scrub"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});` +
+        `way["landuse"="orchard"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});` +
+        `way["landuse"="vineyard"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});` +
+        `way["natural"="heath"](${bbox.s},${bbox.w},${bbox.n},${bbox.e});` +
+        `);out body;>;out skel qt;`;
+
+    try {
+        setVegStatus(statusElId, '🌲 A consultar OSM (vegetação/uso do solo)…', true);
+        const res = await fetch('https://overpass-api.de/api/interpreter', {
+            method:'POST',
+            headers:{'Content-Type':'application/x-www-form-urlencoded'},
+            body:'data='+encodeURIComponent(q)
+        });
+        if (!res.ok) throw new Error('HTTP '+res.status);
+        const data = await res.json();
+
+        const nodeMap = {};
+        data.elements.filter(e=>e.type==='node').forEach(n=>{ nodeMap[n.id]={lat:n.lat,lng:n.lon}; });
+
+        vegetationPolygons = data.elements
+            .filter(e=>e.type==='way' && e.nodes && e.tags)
+            .map(way=>{
+                const vegType = way.tags.natural || way.tags.landuse || 'forest';
+                const points  = way.nodes.map(id=>nodeMap[id]).filter(Boolean);
+                return {type: vegType, points};
+            })
+            .filter(w=>w.points.length>=3);
+
+        vegCacheBbox = key;
+        const cnt = vegetationPolygons.length;
+        setVegStatus(statusElId, cnt>0 ? `🌲 ${cnt} polígonos de vegetação carregados` : '🌲 Sem vegetação mapeada na área', false);
+        drawVegetationMapLayer();
+        return vegetationPolygons;
+    } catch(err) {
+        setVegStatus(statusElId, '⚠️ OSM indisponível — vegetação ignorada', false);
+        vegetationPolygons = [];
+        return [];
+    }
+}
+
+function drawVegetationMapLayer() {
+    if (vegMapLayer) { try{map.removeLayer(vegMapLayer);}catch(e){} vegMapLayer=null; }
+    if (vegetationPolygons.length===0) return;
+    vegMapLayer = L.layerGroup();
+    vegetationPolygons.forEach(poly=>{
+        const col = VEG_COLORS[poly.type] || '#2d7a1b';
+        const name = VEG_NAMES_PT[poly.type] || poly.type;
+        const lp = L.polygon(poly.points.map(p=>[p.lat,p.lng]),{
+            color:col, weight:0.8, fillColor:col, fillOpacity:0.28
+        });
+        lp.bindTooltip(`🌲 ${name}`,{sticky:true,className:'leaflet-tooltip'});
+        vegMapLayer.addLayer(lp);
+    });
+    map.addLayer(vegMapLayer);
+    // Show legend
+    const leg = document.getElementById('veg-legend');
+    if (leg) leg.style.display = 'block';
+}
+
+// Ray-casting point-in-polygon (lat/lng)
+function pointInPolygon(lat, lng, poly) {
+    const pts = poly.points; let inside = false;
+    for(let i=0, j=pts.length-1; i<pts.length; j=i++) {
+        const xi=pts[i].lat, yi=pts[i].lng, xj=pts[j].lat, yj=pts[j].lng;
+        if(((yi>lng)!==(yj>lng)) && (lat<(xj-xi)*(lng-yi)/(yj-yi)+xi)) inside=!inside;
+    }
+    return inside;
+}
+
+function vegTypeAtPoint(lat, lng) {
+    for(const poly of vegetationPolygons) {
+        if(pointInPolygon(lat, lng, poly)) return poly.type;
+    }
+    return null;
+}
+
+// Build per-sample vegetation profile for a given set of coordinates
+function buildVegProfile(coords) {
+    return coords.map(c=>({
+        vegType: vegTypeAtPoint(c.lat, c.lng),
+        get attDB() { return this.vegType ? (VEG_ATT_DB_KM[this.vegType]||5) : 0; }
+    }));
+}
+
+// Total extra attenuation for a path and its veg profile
+function calcVegAttenuation(vegProfile, totalDistKm) {
+    const N = vegProfile.length - 1 || 1;
+    const segKm = totalDistKm / N;
+    let totalDB = 0, vegKm = 0;
+    const typeCounts = {};
+    vegProfile.forEach(v=>{
+        totalDB += v.attDB * segKm;
+        if(v.vegType) {
+            vegKm += segKm;
+            typeCounts[v.vegType] = (typeCounts[v.vegType]||0) + 1;
+        }
+    });
+    // Extra loss X dB → range multiplier = 10^(-X/20)
+    const multiplier = totalDB > 0 ? Math.pow(10, -totalDB/20) : 1.0;
+    return { totalDB, vegKm, multiplier, typeCounts };
+}
+
+// Generate N+1 sample points along path A→B
+function pathSamples(posA, posB, N=24) {
+    const pts = [];
+    for(let i=0;i<=N;i++) pts.push({lat:posA.lat+(posB.lat-posA.lat)*i/N, lng:posA.lng+(posB.lng-posA.lng)*i/N});
+    return pts;
+}
+
+
+function getDistance(lat1,lon1,lat2,lon2) {
+    const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
+    const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+}
+
+function destinationPoint(lat,lng,bearingDeg,distKm) {
+    const R=6371, brng=bearingDeg*Math.PI/180;
+    const latR=lat*Math.PI/180, lngR=lng*Math.PI/180, d=distKm/R;
+    const lat2=Math.asin(Math.sin(latR)*Math.cos(d)+Math.cos(latR)*Math.sin(d)*Math.cos(brng));
+    const lng2=lngR+Math.atan2(Math.sin(brng)*Math.sin(d)*Math.cos(latR),Math.cos(d)-Math.sin(latR)*Math.sin(lat2));
+    return {lat:lat2*180/Math.PI, lng:lng2*180/Math.PI};
+}
+
+function fresnelRadius(d1km,d2km,totalKm,freqMHz) {
+    if(d1km<=0||d2km<=0||totalKm<=0) return 0;
+    return 17.3*Math.sqrt((d1km*d2km)/(freqMHz/1000*totalKm));
+}
+
+function maxRangeKm(power,effAlt,weatherFactor) {
+    const horizon=4.12*Math.sqrt(Math.max(effAlt,1));
+    const pf=0.9+0.85*Math.sqrt(power);
+    return Math.max(horizon*0.55,1)*(pf/3)*weatherFactor+horizon*0.15;
+}
+
+// ══════════════════════════════════════════════════════
+//  LINK MODE
+// ══════════════════════════════════════════════════════
+function triggerRecalculate() {
+    const mode = document.getElementById('analysis-mode').value;
+    if (mode==='network') return;
+    if (mode==='scanner' && markerA) runCoverageScanner();
+    else if (mode==='link' && markerA && markerB) updateLinkUI();
+}
+
+async function updateLinkUI() {
+    if (busy) return;
+    busy=true; document.getElementById('loader').style.display='inline-block';
+    try {
+        const posA=markerA.getLatLng(), posB=markerB.getLatLng();
+        const dist=getDistance(posA.lat,posA.lng,posB.lat,posB.lng);
+        const offA=parseInt(document.getElementById('radioA-offset').value)||0;
+        const offB=parseInt(document.getElementById('radioB-offset').value)||0;
+        const effAltA=altA+offA, effAltB=altB+offB;
+        const pA=parseFloat(document.getElementById('radioA-power').value)||0.1;
+        const pB=parseFloat(document.getElementById('radioB-power').value)||0.1;
+        const wf=parseFloat(document.getElementById('weather').value);
+        const useVeg = document.getElementById('use-vegetation').checked;
+
+        // Fetch LOS + vegetation in PARALLEL for speed
+        const bbox = pathBbox(posA, posB);
+        const [los] = await Promise.all([
+            checkLineOfSightReal(posA,posB,dist,effAltA,effAltB),
+            useVeg ? fetchVegetationForBbox(bbox, 'veg-status') : Promise.resolve([])
+        ]);
+
+        // Vegetation profile & attenuation (synchronous — uses cached polygons)
+        const samples = pathSamples(posA, posB, 24);
+        const vegProfile = useVeg ? buildVegProfile(samples) : samples.map(()=>({vegType:null,attDB:0}));
+        const vegAtten   = calcVegAttenuation(vegProfile, dist);
+
+        // Adjust effective ranges for vegetation loss
+        const rA_base=maxRangeKm(pA,effAltA,wf), rB_base=maxRangeKm(pB,effAltB,wf);
+        const rA=rA_base*vegAtten.multiplier, rB=rB_base*vegAtten.multiplier;
+
+        if(circleA) map.removeLayer(circleA); if(circleB) map.removeLayer(circleB);
+        circleA=L.circle(posA,{radius:rA*1000,color:'#4eff4e',weight:2,fillColor:'#5b7a47',fillOpacity:.12}).addTo(map);
+        circleB=L.circle(posB,{radius:rB*1000,color:'#00c3ff',weight:2,fillColor:'#3b5c66',fillOpacity:.10}).addTo(map);
+        if(polylineLink) map.removeLayer(polylineLink);
+        if(obstacleMarker) map.removeLayer(obstacleMarker);
+
+        drawProfileChart(los, dist, vegProfile);
+
+        const lineColor = los.status==='blocked'?'#ff4e4e':los.status==='marginal'?'#ffcc00':'#4eff4e';
+        let qHTML = los.status==='blocked' ? "<span class='status-bad'>BLOQUEADO</span>"
+                  : los.status==='marginal' ? "<span class='status-marginal'>Marginal (Fresnel)</span>"
+                  : "<span class='status-good'>Excelente (LOS livre)</span>";
+        if(useVeg && vegAtten.totalDB>2) qHTML += ` <span style="color:#4eb84e;font-size:.8em">(+${vegAtten.totalDB.toFixed(1)}dB veg.)</span>`;
+
+        if(los.worstPoint && los.status!=='good') {
+            const obstacleLat=los.worstPoint.lat, obstacleLng=los.worstPoint.lng;
+            const obstacleAlt=Math.round(los.worstTerrainAlt)||0;
+            const distFromA=getDistance(posA.lat,posA.lng,obstacleLat,obstacleLng).toFixed(2);
+            const obstacleLabel = los.status==='blocked' ? '⛔ OBSTRUÇÃO TOTAL' : '⚠️ OBSTRUÇÃO PARCIAL (Fresnel)';
+            const vegAtPoint = vegTypeAtPoint(obstacleLat, obstacleLng);
+            const obstaclePopup = `
+              <div style="font-family:'Segoe UI',sans-serif;min-width:200px;font-size:12px;line-height:1.5;">
+                <div style="background:${lineColor}33;border-left:3px solid ${lineColor};padding:4px 7px;margin-bottom:6px;">
+                  <b style="color:${lineColor};font-size:12px;">${obstacleLabel}</b>
+                </div>
+                <table style="width:100%;border-collapse:collapse;">
+                  <tr><td style="color:#888;padding:1px 4px;">🌐 Latitude</td><td style="padding:1px 4px;font-family:monospace;">${obstacleLat.toFixed(6)}°</td></tr>
+                  <tr><td style="color:#888;padding:1px 4px;">🌐 Longitude</td><td style="padding:1px 4px;font-family:monospace;">${obstacleLng.toFixed(6)}°</td></tr>
+                  <tr><td style="color:#888;padding:1px 4px;">⛰ Altitude</td><td style="padding:1px 4px;"><b>${obstacleAlt} m</b></td></tr>
+                  <tr><td style="color:#888;padding:1px 4px;">📏 Dist. de A</td><td style="padding:1px 4px;">${distFromA} km</td></tr>
+                  <tr><td style="color:#888;padding:1px 4px;">📶 Fresnel inv.</td><td style="padding:1px 4px;">${(los.worstIntrusionPct*100).toFixed(0)}%</td></tr>
+                  ${vegAtPoint?`<tr><td style="color:#4eb84e;padding:1px 4px;">🌲 Vegetação</td><td style="padding:1px 4px;">${VEG_NAMES_PT[vegAtPoint]||vegAtPoint}</td></tr>`:''}
+                </table>
+                <div style="margin-top:5px;padding:3px 7px;background:#1a2417;border-radius:3px;font-size:10px;color:#7d9474;">
+                  Ponto crítico detectado pela análise de relevo real.
+                </div>
+              </div>`;
+            obstacleMarker=L.circleMarker([obstacleLat,obstacleLng],{radius:9,color:lineColor,weight:2.5,fillColor:lineColor,fillOpacity:.85}).addTo(map);
+            obstacleMarker.bindPopup(obstaclePopup,{maxWidth:260}).openPopup();
+        }
+        polylineLink=L.polyline([posA,posB],{color:lineColor,weight:3,dashArray:'5,8'}).addTo(map);
+
+        const nameA_label=document.getElementById('radioA-name').value||'Alpha';
+        const nameB_label=document.getElementById('radioB-name').value||'Bravo';
+        document.getElementById('res-distance').innerText=`Distância: ${dist.toFixed(2)} km`;
+        document.getElementById('res-diff-alt').innerText=`ΔAlt efectiva: ${Math.abs(effAltA-effAltB)} m`;
+        document.getElementById('res-max-range').innerText=`Alc A→B: ${rA.toFixed(1)}km | Alc B→A: ${rB.toFixed(1)}km (c/ vegetação)`;
+        document.getElementById('res-quality').innerHTML=`Qualidade: ${qHTML}`;
+        document.getElementById('res-fresnel').innerText=`Fresnel @446MHz: invasão máx ${(los.worstIntrusionPct*100).toFixed(0)}%`;
+
+        // Vegetation summary in results
+        const vegEl = document.getElementById('res-vegetation');
+        if(useVeg && vegAtten.vegKm > 0.01) {
+            const typeStr = Object.keys(vegAtten.typeCounts).map(t=>VEG_NAMES_PT[t]||t).join(', ');
+            vegEl.innerText = `🌲 Vegetação: ${vegAtten.vegKm.toFixed(2)} km (${typeStr}) → −${vegAtten.totalDB.toFixed(1)} dB → alcance ×${vegAtten.multiplier.toFixed(2)}`;
+            vegEl.style.display='block';
+        } else {
+            vegEl.innerText = useVeg ? '🌲 Vegetação: sem cobertura no trajecto' : '🌲 Vegetação: desactivada';
+            vegEl.style.display='block';
+        }
+
+        const statusLabel=los.status==='blocked'?'BLOQUEADO':los.status==='marginal'?'MARGINAL':'DESOBSTRUÍDO';
+        document.getElementById('log-output').innerText=
+            `[ENLACE BIDIRECIONAL A↔B]\n`+
+            `Data/Hora: ${new Date().toLocaleString('pt-PT')}\n`+
+            `Estado LOS: ${statusLabel}\n`+
+            `Distância: ${dist.toFixed(3)} km\n\n`+
+            `RÁDIO A — ${nameA_label} (Emissor/Recetor)\n`+
+            `  GPS: ${posA.lat.toFixed(6)}°N, ${posA.lng.toFixed(6)}°E\n`+
+            `  Terreno: ${altA}m + Antena: ${offA}m = ${effAltA}m efect.\n`+
+            `  Potência TX: ${pA}W | Alcance base: ${rA_base.toFixed(1)} km | Com veg: ${rA.toFixed(1)} km\n\n`+
+            `RÁDIO B — ${nameB_label} (Emissor/Recetor)\n`+
+            `  GPS: ${posB.lat.toFixed(6)}°N, ${posB.lng.toFixed(6)}°E\n`+
+            `  Terreno: ${altB}m + Antena: ${offB}m = ${effAltB}m efect.\n`+
+            `  Potência TX: ${pB}W | Alcance base: ${rB_base.toFixed(1)} km | Com veg: ${rB.toFixed(1)} km\n\n`+
+            `VEGETAÇÃO NO TRAJECTO\n`+
+            `  ${vegAtten.vegKm>0.01 ? `${vegAtten.vegKm.toFixed(2)} km atravessados em vegetação\n  Atenuação extra: ${vegAtten.totalDB.toFixed(1)} dB → multiplicador de alcance: ×${vegAtten.multiplier.toFixed(3)}` : 'Nenhuma vegetação mapeada no percurso'}`+
+            (los.worstPoint?`\n\nPONTO CRÍTICO DE RELEVO\n  GPS: ${los.worstPoint.lat.toFixed(6)}°N, ${los.worstPoint.lng.toFixed(6)}°E\n  Altitude: ${Math.round(los.worstTerrainAlt)}m`:'');
+
+        currentCalculatedData={
+            dist:dist.toFixed(3),altA,offA,effAltA,latA:posA.lat.toFixed(6),lngA:posA.lng.toFixed(6),nameA:nameA_label,powerA:pA,
+            altB,offB,effAltB,latB:posB.lat.toFixed(6),lngB:posB.lng.toFixed(6),nameB:nameB_label,powerB:pB,statusLabel,
+            vegDB:vegAtten.totalDB.toFixed(1), vegKm:vegAtten.vegKm.toFixed(2),
+            timestamp:new Date().toLocaleString('pt-PT'),weather:document.getElementById('weather').options[document.getElementById('weather').selectedIndex].text
+        };
+    } finally { busy=false; document.getElementById('loader').style.display='none'; }
+}
+
+async function checkLineOfSightReal(posA,posB,totalDist,effAltA,effAltB) {
+    const N=24, coords=[];
+    for(let i=0;i<=N;i++) coords.push({lat:posA.lat+(posB.lat-posA.lat)*i/N, lng:posA.lng+(posB.lng-posA.lng)*i/N});
+    const terrainElevs=await batchElevation(coords);
+    const Reff=8495, freqMHz=446;
+    let worstIntrusionPct=0, worstPoint=null, worstTerrainAlt=0, status='good', profileArr=[];
+    for(let i=0;i<=N;i++) {
+        const f=i/N, d1=totalDist*f, d2=totalDist-d1;
+        const lineH=effAltA+(effAltB-effAltA)*f-(d1*d2)/(2*Reff)*1000;
+        const terrain=terrainElevs[i]; profileArr.push(terrain);
+        const clearance=lineH-terrain;
+        const fres=fresnelRadius(d1,d2,totalDist,freqMHz);
+        const ip=fres>0?Math.max(0,(fres-clearance)/fres):0;
+        if(clearance<0&&i!==0&&i!==N) {
+            status='blocked';
+            if(ip>worstIntrusionPct){worstIntrusionPct=ip;worstPoint=coords[i];worstTerrainAlt=terrain;}
+        } else if(ip>0.4&&status!=='blocked') {
+            status='marginal';
+            if(ip>worstIntrusionPct){worstIntrusionPct=ip;worstPoint=coords[i];worstTerrainAlt=terrain;}
+        } else if(ip>worstIntrusionPct&&status==='good') { worstIntrusionPct=ip; worstTerrainAlt=terrain; }
+    }
+    return {status,worstIntrusionPct,worstPoint,worstTerrainAlt,profileArr,effAltA,effAltB};
+}
+
+function drawProfileChart(losReport, totalDist, vegProfile=[]) {
+    const svg=document.getElementById('profile-svg'); svg.innerHTML='';
+    const p=losReport.profileArr;
+    const allV=[...p,losReport.effAltA,losReport.effAltB];
+    const minV=Math.min(...allV), maxV=Math.max(...allV,minV+50);
+    const range=(maxV-minV)*1.15||1, N=p.length-1;
+    const xAt=i=>25+(i/N)*250, yAt=v=>95-((v-minV)/range)*80;
+
+    // ── Vegetation strip at top (y 0→8) ──────────────────
+    if(vegProfile.length>0) {
+        const segW = 250 / N;
+        vegProfile.forEach((v,i)=>{
+            if(!v.vegType) return;
+            const col = VEG_COLORS[v.vegType]||'#2d7a1b';
+            const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+            rect.setAttribute('x', xAt(i)-segW/2); rect.setAttribute('y','0');
+            rect.setAttribute('width', segW+1); rect.setAttribute('height','8');
+            rect.setAttribute('fill',col); rect.setAttribute('opacity','0.85');
+            svg.appendChild(rect);
+        });
+        const vegLabel=document.createElementNS('http://www.w3.org/2000/svg','text');
+        vegLabel.setAttribute('x','276'); vegLabel.setAttribute('y','7');
+        vegLabel.setAttribute('fill','#4eb84e'); vegLabel.setAttribute('font-size','5.5');
+        vegLabel.setAttribute('font-family','sans-serif'); vegLabel.textContent='VEG';
+        svg.appendChild(vegLabel);
+    }
+
+    // ── Terrain polygon ───────────────────────────────────
+    let pts=`${xAt(0)},100 `;
+    for(let i=0;i<=N;i++) pts+=`${xAt(i)},${yAt(p[i])} `;
+    pts+=`${xAt(N)},100`;
+    const poly=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+    poly.setAttribute('points',pts);
+    poly.setAttribute('fill',losReport.status==='blocked'?'#3d1814':losReport.status==='marginal'?'#3d3414':'#1a2417');
+    poly.setAttribute('stroke',losReport.status==='blocked'?'#ff4e4e':losReport.status==='marginal'?'#ffcc00':'#5b7a47');
+    svg.appendChild(poly);
+
+    // ── Vegetation column overlays on terrain ─────────────
+    if(vegProfile.length>0) {
+        const segW = 250 / N;
+        vegProfile.forEach((v,i)=>{
+            if(!v.vegType) return;
+            const col = VEG_COLORS[v.vegType]||'#2d7a1b';
+            const terrainY = yAt(p[i]||0);
+            const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+            rect.setAttribute('x', xAt(i)-segW/2); rect.setAttribute('y', terrainY-10);
+            rect.setAttribute('width', segW+1); rect.setAttribute('height','10');
+            rect.setAttribute('fill',col); rect.setAttribute('opacity','0.45');
+            svg.appendChild(rect);
+        });
+    }
+
+    // ── Beam (line of sight) ──────────────────────────────
+    const beam=document.createElementNS('http://www.w3.org/2000/svg','line');
+    beam.setAttribute('x1',xAt(0)); beam.setAttribute('y1',yAt(losReport.effAltA));
+    beam.setAttribute('x2',xAt(N)); beam.setAttribute('y2',yAt(losReport.effAltB));
+    beam.setAttribute('stroke',losReport.status==='blocked'?'red':losReport.status==='marginal'?'#ffcc00':'#4eff4e');
+    beam.setAttribute('stroke-width','1.5'); svg.appendChild(beam);
+
+    const mkText=(x,y,txt,fill,sz='7')=>{ const t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('x',x);t.setAttribute('y',y);t.setAttribute('fill',fill);t.setAttribute('font-size',sz);t.setAttribute('font-family','sans-serif');t.textContent=txt;svg.appendChild(t); };
+    mkText(3,18,'▲ A','#4eff4e'); mkText(260,18,'▲ B','#00c3ff');
+    mkText(90,97,`${totalDist.toFixed(1)} km (relevo real)`,'#5b7a47');
+}
+
+// ══════════════════════════════════════════════════════
+//  SCANNER MODE
+// ══════════════════════════════════════════════════════
+async function runCoverageScanner() {
+    if(busy) return;
+    busy=true; document.getElementById('loader').style.display='inline-block';
+    try {
+        const center=markerA.getLatLng();
+        const offA=parseInt(document.getElementById('radioA-offset').value)||0;
+        const effAltA=altA+offA;
+        const pA=parseFloat(document.getElementById('radioA-power').value)||0.1;
+        const wf=parseFloat(document.getElementById('weather').value);
+        const maxKm=maxRangeKm(pA,effAltA,wf);
+        if(scanPolygon) map.removeLayer(scanPolygon);
+        if(circleA) map.removeLayer(circleA);
+        const rayCount=16, spr=5, allCoords=[], rayMeta=[];
+        for(let r=0;r<rayCount;r++) {
+            const bearing=(r*360)/rayCount;
+            for(let s=1;s<=spr;s++) {
+                const d=maxKm*(s/spr), pt=destinationPoint(center.lat,center.lng,bearing,d);
+                allCoords.push(pt); rayMeta.push({ray:r,dist:d});
+            }
+        }
+        const elevs=await batchElevation(allCoords);
+        const Reff=8495, polyCoords=[];
+
+        // Fetch vegetation for the scanner area if active
+        const useVeg = document.getElementById('use-vegetation').checked;
+        if(useVeg) await fetchVegetationForBbox({s:center.lat-maxKm/90,w:center.lng-maxKm/70,n:center.lat+maxKm/90,e:center.lng+maxKm/70},'veg-status');
+
+        for(let r=0;r<rayCount;r++) {
+            let rayRange=maxKm;
+            for(let s=0;s<spr;s++) {
+                const idx=r*spr+s, d=rayMeta[idx].dist, terrain=elevs[idx];
+                const lh=effAltA-(d*d)/(2*Reff)*1000;
+                if(terrain>lh+5){rayRange=Math.min(rayRange,d);break;}
+            }
+            // Apply vegetation attenuation for this ray
+            if(useVeg && vegetationPolygons.length>0) {
+                const raySamples=[];
+                for(let s=0;s<spr;s++) raySamples.push(allCoords[r*spr+s]);
+                const vp = buildVegProfile(raySamples);
+                const va = calcVegAttenuation(vp, rayRange);
+                rayRange = rayRange * va.multiplier;
+            }
+            const ep=destinationPoint(center.lat,center.lng,(r*360)/rayCount,Math.max(rayRange,maxKm*.10));
+            polyCoords.push([ep.lat,ep.lng]);
+        }
+        scanPolygon=L.polygon(polyCoords,{color:'#4eff4e',weight:2,fillColor:'#5b7a47',fillOpacity:.28,dashArray:'4,5'}).addTo(map);
+        document.getElementById('res-distance').innerText='Modo: Scanner 360º';
+        document.getElementById('res-diff-alt').innerText=`Centro: ${nameA}`;
+        document.getElementById('res-max-range').innerText=`Raio teórico: ${maxKm.toFixed(2)} km`;
+        document.getElementById('res-quality').innerHTML=`<span class='status-good'>Cobertura traçada sobre relevo real</span>`;
+        document.getElementById('res-fresnel').innerText=`${rayCount} raios × ${spr} amostras de elevação`;
+        document.getElementById('log-output').innerText=`[SCANNER 360º]\nCentro: ${nameA}\nLat ${center.lat.toFixed(5)}, Lng ${center.lng.toFixed(5)}\nAlt: ${altA}m + ${offA}m = ${effAltA}m | ${pA}W\nAlcance teórico: ${maxKm.toFixed(2)} km`;
+    } finally { busy=false; document.getElementById('loader').style.display='none'; }
+}
+
+// ══════════════════════════════════════════════════════
+//  NETWORK MODE — NODE MANAGEMENT
+// ══════════════════════════════════════════════════════
+function startPlacingNode() {
+    isPlacingNode=true;
+    document.getElementById('placement-banner').style.display='block';
+    map.getContainer().style.cursor='crosshair';
+}
+
+function cancelPlacement() {
+    isPlacingNode=false;
+    document.getElementById('placement-banner').style.display='none';
+    map.getContainer().style.cursor='';
+}
+
+async function placeNetworkNode(latlng) {
+    cancelPlacement();
+    const name=document.getElementById('net-node-name').value||`Nó ${nextNodeId}`;
+    const type=document.getElementById('net-node-type').value;
+    const model=document.getElementById('net-node-model').value;
+    const power=parseFloat(document.getElementById('net-node-power').value)||0.5;
+    const offset=parseInt(document.getElementById('net-node-offset').value)||0;
+    const id=nextNodeId++;
+    const color=NODE_COLORS[type];
+
+    // Create styled marker
+    const icon=L.divIcon({
+        className:'',
+        html:`<div style="background:${color};border:2px solid #fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,.8);">${type==='base'?'B':type==='repeater'?'R':'P'}</div>`,
+        iconSize:[22,22], iconAnchor:[11,11]
+    });
+    const marker=L.marker([latlng.lat,latlng.lng],{draggable:true,icon}).addTo(map);
+    marker.bindPopup(`<b>${name}</b><br>Tipo: ${NODE_LABELS[type]}<br>A obter altitude...`);
+
+    // Get elevation
+    const elevs=await batchElevation([{lat:latlng.lat,lng:latlng.lng}]);
+    const alt=Math.round(elevs[0]);
+
+    const node={id,name,type,model,power,offset,lat:latlng.lat,lng:latlng.lng,alt,marker};
+    networkNodes.push(node);
+
+    marker.bindPopup(`<b>${name}</b><br>Tipo: ${NODE_LABELS[type]}<br>⛰ Alt: ${alt}m + ${offset}m offset<br>📻 ${power}W`);
+    marker.on('dragend', async function(ev) {
+        const ll=ev.target.getLatLng();
+        node.lat=ll.lat; node.lng=ll.lng;
+        const e2=await batchElevation([{lat:ll.lat,lng:ll.lng}]);
+        node.alt=Math.round(e2[0]);
+        marker.bindPopup(`<b>${name}</b><br>⛰ Alt: ${node.alt}m + ${node.offset}m offset<br>📻 ${node.power}W`);
+        renderNodeListUI();
+    });
+
+    // Auto-increment name for convenience
+    const typeLabel=type==='base'?'Base':type==='repeater'?'Repetidor':'Patrulha';
+    document.getElementById('net-node-name').value=`${typeLabel} ${String.fromCharCode(65+networkNodes.length)}`;
+
+    renderNodeListUI();
+}
+
+function removeNetworkNode(id) {
+    const idx=networkNodes.findIndex(n=>n.id===id);
+    if(idx===-1) return;
+    const node=networkNodes[idx];
+    try{map.removeLayer(node.marker);}catch(e){}
+    networkNodes.splice(idx,1);
+    renderNodeListUI();
+    // Clear analysis layers
+    clearNetworkLayers();
+    document.getElementById('matrix-container').innerHTML='<div style="color:#445041;font-size:.75rem;padding:6px;">Rede alterada — re-analisar.</div>';
+    document.getElementById('log-output').innerText='Nó removido. Pressione "Analisar Rede" para actualizar.';
+}
+
+function clearNetwork() {
+    networkNodes.forEach(n=>{ try{map.removeLayer(n.marker);}catch(e){} });
+    networkNodes=[]; clearNetworkLayers();
+    document.getElementById('matrix-container').innerHTML='<div style="color:#445041;font-size:.75rem;padding:6px;">Rede limpa.</div>';
+    document.getElementById('log-output').innerText='Rede limpa.';
+    renderNodeListUI();
+}
+
+function renderNodeListUI() {
+    const list=document.getElementById('node-list');
+    document.getElementById('net-node-count').innerText=`(${networkNodes.length} nó${networkNodes.length!==1?'s':''})`;
+    if(networkNodes.length===0) {
+        list.innerHTML='<div style="color:#445041;font-size:.75rem;font-style:italic;">Nenhum nó posicionado ainda.</div>';
+        return;
+    }
+    list.innerHTML='';
+    networkNodes.forEach(node=>{
+        const div=document.createElement('div'); div.className='node-item';
+        const dot=document.createElement('div'); dot.className='node-dot'; dot.style.background=NODE_COLORS[node.type];
+        const info=document.createElement('div'); info.className='node-info';
+        info.innerHTML=`<b>${node.name}</b><small>${NODE_LABELS[node.type]} · ${node.power}W · ⛰${node.alt+node.offset}m</small>`;
+        const btn=document.createElement('button'); btn.className='node-btn'; btn.textContent='✕';
+        btn.onclick=()=>removeNetworkNode(node.id);
+        div.appendChild(dot); div.appendChild(info); div.appendChild(btn);
+        list.appendChild(div);
+    });
+}
+
+// ══════════════════════════════════════════════════════
+//  NETWORK MODE — ANALYSIS ENGINE
+// ══════════════════════════════════════════════════════
+async function runNetworkAnalysis() {
+    if(networkNodes.length<2) { alert('Posicione pelo menos 2 nós na rede antes de analisar.'); return; }
+    if(busy) return;
+    busy=true; document.getElementById('net-loader').style.display='inline-block';
+    clearNetworkLayers();
+
+    try {
+        const wf=parseFloat(document.getElementById('net-weather').value);
+        const N_SAMPLES=14; // samples per link for elevation
+        const pairs=[];
+        for(let i=0;i<networkNodes.length;i++)
+            for(let j=i+1;j<networkNodes.length;j++)
+                pairs.push([i,j]);
+
+        // Batch ALL elevation points in ONE API call
+        const allCoords=[];
+        const pairCoordRanges=[];
+        pairs.forEach(([i,j])=>{
+            const a=networkNodes[i], b=networkNodes[j];
+            const start=allCoords.length;
+            for(let s=0;s<=N_SAMPLES;s++)
+                allCoords.push({lat:a.lat+(b.lat-a.lat)*s/N_SAMPLES, lng:a.lng+(b.lng-a.lng)*s/N_SAMPLES});
+            pairCoordRanges.push({i,j,start,count:N_SAMPLES+1});
+        });
+
+        const allElevs=await batchElevation(allCoords);
+
+        // Fetch vegetation ONCE for the full network bounding box
+        const useVeg = document.getElementById('net-use-vegetation').checked;
+        if(useVeg && networkNodes.length>=2) {
+            const netBbox = bboxFromNodes(networkNodes, 0.05);
+            await fetchVegetationForBbox(netBbox,'net-veg-status');
+        }
+
+        // Analyze each pair
+        const pairResults=[];
+        for(const {i,j,start,count} of pairCoordRanges) {
+            const a=networkNodes[i], b=networkNodes[j];
+            const terrainSlice=allElevs.slice(start,start+count);
+            const dist=getDistance(a.lat,a.lng,b.lat,b.lng);
+            const effA=a.alt+a.offset, effB=b.alt+b.offset;
+            const los=analyzeSegment(terrainSlice,dist,effA,effB);
+            // Vegetation attenuation for this pair
+            const pairCoords = Array.from({length:count},(_,k)=>allCoords[start+k]);
+            const vegAtt = (useVeg && vegetationPolygons.length>0)
+                ? calcVegAttenuation(buildVegProfile(pairCoords), dist)
+                : {multiplier:1.0, totalDB:0};
+            const rA=maxRangeKm(a.power,effA,wf)*vegAtt.multiplier;
+            const rB=maxRangeKm(b.power,effB,wf)*vegAtt.multiplier;
+            const inRange=dist<=(rA+rB)/2*1.15;
+            pairResults.push({i,j,dist,los,inRange,effA,effB,rA,rB,vegDB:vegAtt.totalDB});
+        }
+
+        // Relay detection: for each blocked pair, check if any repeater bridges it
+        const directReachable=(i,j)=>{
+            const r=pairResults.find(p=>(p.i===i&&p.j===j)||(p.i===j&&p.j===i));
+            return r && r.inRange && r.los!=='blocked';
+        };
+
+        const relayFor={}; // key "i-j" -> relay node index or null
+        pairs.forEach(([i,j])=>{
+            const res=pairResults.find(p=>p.i===i&&p.j===j);
+            if(!res.inRange||res.los==='blocked') {
+                // look for relay via repeaters (or any other node)
+                for(let k=0;k<networkNodes.length;k++) {
+                    if(k===i||k===j) continue;
+                    if(directReachable(i,k)&&directReachable(k,j)) {
+                        relayFor[`${i}-${j}`]=k; break;
+                    }
+                }
+            }
+        });
+
+        // Draw map layers
+        pairs.forEach(([i,j])=>{
+            const res=pairResults.find(p=>p.i===i&&p.j===j);
+            const a=networkNodes[i], b=networkNodes[j];
+            const relay=relayFor[`${i}-${j}`];
+            let color, dashArray;
+            if(res.inRange&&res.los==='good') { color='#4eff4e'; dashArray='5,8'; }
+            else if(res.inRange&&res.los==='marginal') { color='#ffcc00'; dashArray='5,8'; }
+            else if(relay!==undefined) { color='#00c3ff'; dashArray='3,4'; }
+            else { color='#ff4e4e55'; dashArray='2,6'; }
+            const line=L.polyline([[a.lat,a.lng],[b.lat,b.lng]],{color,weight:2,dashArray}).addTo(map);
+            networkLayers.push(line);
+        });
+
+        // Range circles
+        networkNodes.forEach(node=>{
+            const r=maxRangeKm(node.power,node.alt+node.offset,wf);
+            const c=L.circle([node.lat,node.lng],{radius:r*1000,color:NODE_COLORS[node.type],weight:1.5,fillColor:NODE_COLORS[node.type],fillOpacity:.07,dashArray:'4,6'}).addTo(map);
+            networkLayers.push(c);
+        });
+
+        // Render matrix
+        renderConnectivityMatrix(pairResults,relayFor);
+
+        // Log report
+        let log=`[REDE MULTI-NÓ] ${new Date().toLocaleString('pt-PT')}\n${networkNodes.length} nós, ${pairs.length} pares analisados\n\n`;
+        pairs.forEach(([i,j])=>{
+            const res=pairResults.find(p=>p.i===i&&p.j===j);
+            const a=networkNodes[i],b=networkNodes[j];
+            const relay=relayFor[`${i}-${j}`];
+            let status=res.inRange&&res.los==='good'?'✓ DIRECTO OK':res.inRange&&res.los==='marginal'?'⚠ MARGINAL':relay!==undefined?`⟳ VIA ${networkNodes[relay].name}`:'✗ BLOQUEADO';
+            log+=`${a.name} ↔ ${b.name}: ${res.dist.toFixed(1)}km | ${status}\n`;
+        });
+        document.getElementById('log-output').innerText=log;
+
+    } finally { busy=false; document.getElementById('net-loader').style.display='none'; }
+}
+
+function analyzeSegment(terrainSlice,totalDist,effAltA,effAltB) {
+    const N=terrainSlice.length-1, Reff=8495, freqMHz=446;
+    let status='good';
+    for(let i=1;i<N;i++) {
+        const f=i/N, d1=totalDist*f, d2=totalDist-d1;
+        const lineH=effAltA+(effAltB-effAltA)*f-(d1*d2)/(2*Reff)*1000;
+        const terrain=terrainSlice[i], clearance=lineH-terrain;
+        if(clearance<0) return 'blocked';
+        const fres=fresnelRadius(d1,d2,totalDist,freqMHz);
+        if(fres>0&&(fres-clearance)/fres>0.4&&status!=='blocked') status='marginal';
+    }
+    return status;
+}
+
+function renderConnectivityMatrix(pairResults,relayFor) {
+    const n=networkNodes.length;
+    let html='<table class="matrix-table"><thead><tr><th>↔</th>';
+    networkNodes.forEach(node=>{ html+=`<th style="color:${NODE_COLORS[node.type]}">${node.name}</th>`; });
+    html+='</tr></thead><tbody>';
+    for(let i=0;i<n;i++) {
+        html+=`<tr><th style="color:${NODE_COLORS[networkNodes[i].type]}">${networkNodes[i].name}</th>`;
+        for(let j=0;j<n;j++) {
+            if(i===j){html+='<td class="m-self">—</td>';continue;}
+            const ii=Math.min(i,j), jj=Math.max(i,j);
+            const res=pairResults.find(p=>p.i===ii&&p.j===jj);
+            const relay=relayFor[`${ii}-${jj}`];
+            let cls,txt,title;
+            if(res.inRange&&res.los==='good'){
+                cls='m-good';txt=`✓`;title=`${res.dist.toFixed(1)}km — LOS livre`;
+            } else if(res.inRange&&res.los==='marginal'){
+                cls='m-marginal';txt=`⚠`;title=`${res.dist.toFixed(1)}km — Fresnel obstruído`;
+            } else if(relay!==undefined){
+                cls='m-relay';txt=`⟳`;title=`Via ${networkNodes[relay].name} (${res.dist.toFixed(1)}km directo)`;
+            } else {
+                cls='m-blocked';txt=`✗`;title=`${res.dist.toFixed(1)}km — Sem sinal`;
+            }
+            html+=`<td class="${cls}" title="${title}">${txt}<br><small style="opacity:.6">${res.dist.toFixed(1)}km${res.vegDB>1?' 🌲':''}</small></td>`;
+        }
+        html+='</tr>';
+    }
+    html+='</tbody></table>';
+    html+=`<div style="padding:4px 6px;font-size:.68rem;color:#5b7a47;">
+        <span class="status-good">✓ Directo</span> &nbsp;
+        <span class="status-marginal">⚠ Marginal</span> &nbsp;
+        <span class="status-relay">⟳ Via Repetidor</span> &nbsp;
+        <span class="status-bad">✗ Bloqueado</span>
+    </div>`;
+    document.getElementById('matrix-container').innerHTML=html;
+}
+
+// ══════════════════════════════════════════════════════
+//  SCENARIO SAVE / LOAD
+// ══════════════════════════════════════════════════════
+function scenarioToJSON() {
+    return {
+        name: document.getElementById('scenario-name').value,
+        weather: document.getElementById('net-weather').value,
+        nodes: networkNodes.map(n=>({id:n.id,name:n.name,type:n.type,model:n.model,power:n.power,offset:n.offset,lat:n.lat,lng:n.lng,alt:n.alt}))
+    };
+}
+
+async function loadNodesFromData(data) {
+    clearNetwork();
+    document.getElementById('net-weather').value=data.weather||'1.0';
+    for(const nd of data.nodes) {
+        nextNodeId=Math.max(nextNodeId,nd.id+1);
+        const color=NODE_COLORS[nd.type];
+        const icon=L.divIcon({
+            className:'',
+            html:`<div style="background:${color};border:2px solid #fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,.8);">${nd.type==='base'?'B':nd.type==='repeater'?'R':'P'}</div>`,
+            iconSize:[22,22],iconAnchor:[11,11]
+        });
+        const marker=L.marker([nd.lat,nd.lng],{draggable:true,icon}).addTo(map);
+        marker.bindPopup(`<b>${nd.name}</b><br>⛰ Alt: ${nd.alt}m + ${nd.offset}m<br>📻 ${nd.power}W`);
+        const node={...nd,marker};
+        networkNodes.push(node);
+        marker.on('dragend',async function(ev){
+            const ll=ev.target.getLatLng(); node.lat=ll.lat; node.lng=ll.lng;
+            const e2=await batchElevation([{lat:ll.lat,lng:ll.lng}]); node.alt=Math.round(e2[0]);
+            marker.bindPopup(`<b>${node.name}</b><br>⛰ Alt: ${node.alt}m + ${node.offset}m<br>📻 ${node.power}W`);
+            renderNodeListUI();
+        });
+    }
+    renderNodeListUI();
+    if(networkNodes.length>1) map.fitBounds(L.latLngBounds(networkNodes.map(n=>[n.lat,n.lng])).pad(.2));
+}
+
+function saveScenario() {
+    const sname=document.getElementById('scenario-name').value.trim()||'Cenário';
+    const key='pmr_scenario_'+sname;
+    localStorage.setItem(key,JSON.stringify(scenarioToJSON()));
+    loadScenarioList();
+    // select it
+    document.getElementById('scenario-list').value=sname;
+    document.getElementById('log-output').innerText=`✅ Cenário "${sname}" guardado em localStorage.`;
+}
+
+function loadScenarioList() {
+    const sel=document.getElementById('scenario-list');
+    const current=sel.value;
+    sel.innerHTML='<option value="">— Selecionar cenário —</option>';
+    Object.keys(localStorage).filter(k=>k.startsWith('pmr_scenario_')).forEach(k=>{
+        const sname=k.replace('pmr_scenario_','');
+        const opt=document.createElement('option'); opt.value=sname; opt.textContent=sname;
+        sel.appendChild(opt);
+    });
+    if(current) sel.value=current;
+}
+
+function previewScenario() {
+    const sname=document.getElementById('scenario-list').value;
+    if(!sname) return;
+    const data=localStorage.getItem('pmr_scenario_'+sname);
+    if(!data) return;
+    const d=JSON.parse(data);
+    document.getElementById('log-output').innerText=`Cenário: "${sname}"\n${d.nodes.length} nós:\n${d.nodes.map(n=>`  ${NODE_LABELS[n.type]} ${n.name} — ${n.power}W, offset ${n.offset}m`).join('\n')}\n\nClique "Carregar" para activar.`;
+}
+
+async function loadScenario() {
+    const sname=document.getElementById('scenario-list').value;
+    if(!sname){alert('Selecione um cenário da lista.');return;}
+    const data=localStorage.getItem('pmr_scenario_'+sname);
+    if(!data){alert('Cenário não encontrado.');return;}
+    // Switch to network mode
+    document.getElementById('analysis-mode').value='network';
+    changeAnalysisMode();
+    await loadNodesFromData(JSON.parse(data));
+    document.getElementById('scenario-name').value=sname;
+    document.getElementById('log-output').innerText=`✅ Cenário "${sname}" carregado com ${networkNodes.length} nós.\nPressione "Analisar Rede" para calcular.`;
+}
+
+function deleteScenario() {
+    const sname=document.getElementById('scenario-list').value;
+    if(!sname){alert('Selecione um cenário.');return;}
+    if(!confirm(`Apagar cenário "${sname}"?`)) return;
+    localStorage.removeItem('pmr_scenario_'+sname);
+    loadScenarioList();
+    document.getElementById('log-output').innerText=`🗑 Cenário "${sname}" apagado.`;
+}
+
+function exportScenarioJSON() {
+    if(networkNodes.length===0){alert('Nenhum nó na rede para exportar.');return;}
+    const data=scenarioToJSON();
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`${data.name||'cenario'}_pmr.json`; a.click();
+}
+
+async function importScenarioJSON(event) {
+    const file=event.target.files[0]; if(!file) return;
+    const text=await file.text();
+    try {
+        const data=JSON.parse(text);
+        if(!data.nodes||!Array.isArray(data.nodes)) throw new Error('Formato inválido');
+        document.getElementById('analysis-mode').value='network';
+        changeAnalysisMode();
+        await loadNodesFromData(data);
+        if(data.name) document.getElementById('scenario-name').value=data.name;
+        document.getElementById('log-output').innerText=`✅ Ficheiro importado: "${data.name}" (${data.nodes.length} nós).\nPressione "Analisar Rede".`;
+    } catch(e) { alert('Erro ao importar JSON: '+e.message); }
+    event.target.value='';
+}
+
+// ══════════════════════════════════════════════════════
+//  OVERLAYS
+// ══════════════════════════════════════════════════════
+function toggleRepeaters() {
+    if(!map) return;
+    if(document.getElementById('show-repeaters').checked) {
+        repeaterLayer.clearLayers();
+        referenceRepeaters.forEach(rep=>{
+            const m=L.circleMarker([rep.lat,rep.lng],{radius:6,color:'#fff',weight:1,fillColor:rep.cor,fillOpacity:.9});
+            m.bindPopup(`<b>${rep.indicativo}</b><br>📍 ${rep.localizacao}<br>📻 ${rep.freq} (${rep.tipo})<br><i>Referência ilustrativa</i>`);
+            repeaterLayer.addLayer(m);
+        });
+        map.addLayer(repeaterLayer);
+    } else { repeaterLayer.clearLayers(); map.removeLayer(repeaterLayer); }
+}
+
+// ══════════════════════════════════════════════════════
+//  EXPORT REPORT (link mode)
+// ══════════════════════════════════════════════════════
+function exportReport() {
+    if(!currentCalculatedData) return;
+    const d=currentCalculatedData;
+    const txt=`${'='.repeat(50)}\n    RELATÓRIO DE SIMULAÇÃO PMR/VHF/UHF\n${'='.repeat(50)}\nGerado em: ${d.timestamp}\nDistância: ${d.dist} km\nEstado:    ${d.statusLabel}\nTempo:     ${d.weather}\n${'-'.repeat(50)}\nPONTO A (${d.nameA})\n  GPS: ${d.latA}, ${d.lngA}\n  Terreno: ${d.altA}m + ${d.offA}m offset = ${d.effAltA}m\n  Potência: ${d.powerA}W\n${'-'.repeat(50)}\nPONTO B (${d.nameB})\n  GPS: ${d.latB}, ${d.lngB}\n  Terreno: ${d.altB}m + ${d.offB}m offset = ${d.effAltB}m\n  Potência: ${d.powerB}W\n${'='.repeat(50)}\nModelo aproximado — não substitui estudo profissional.`;
+    const blob=new Blob([txt],{type:'text/plain;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`Relatorio_LOS_${d.dist}km.txt`; a.click();
+}
+</script>
+</body>
+</html>
